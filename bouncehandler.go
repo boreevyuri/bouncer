@@ -50,6 +50,7 @@ func main() {
 				switch hFrom := header.Get("from"); hFrom {
 				case "MAILER-DAEMON@yahoo.com":
 					realRcptAddr, reason = getYahooData(m)
+
 				}
 			}
 
@@ -62,16 +63,39 @@ func main() {
 			if len(reason) == 0 {
 				reason = string(result.Reason)
 			}
-
-			if len(realRcptAddr) > 0 {
-				fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, reason, result.Type, file.Name())
+			if len(realRcptAddr) == 0 {
+				realRcptAddr = findOriginalRecipient(body)
 			}
+
+			//if len(realRcptAddr) > 0 {
+			fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, reason, result.Type, file.Name())
+			//}
 			//if result.Type > 0 {
 			//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, result.Reason, result.Type, file.Name())
 			//}
 			//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, result.Reason, result.Type, file.Name())
 		}
 	}
+}
+
+func findOriginalRecipient(body []byte) string {
+	rcptAddr := ""
+	lns := strings.Split(strings.ToLower(string(body)), "\n")
+	numLines := len(lns)
+	var lines = make([]string, numLines)
+	for i, ln := range lns {
+		lines[numLines-i-1] = ln
+	}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "original-recipient:") {
+			parts := strings.Split(line, ";")
+			if len(parts) > 1 {
+				rcptAddr = strings.Trim(parts[1], "<>")
+			}
+		}
+	}
+	return rcptAddr
 }
 
 //func getDomain(h string) (domain string, err error) {
