@@ -65,10 +65,11 @@ func main() {
 				}
 			}
 
-			fmt.Printf("%s | %s | file: %s\n", realRcptAddr, reason, file.Name())
-			//if len(realRcptAddr) > 0 {
-			//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, reason, result.Type, file.Name())
-			//}
+			//fmt.Printf("%s | %s | file: %s\n", realRcptAddr, reason, file.Name())
+			if len(realRcptAddr) > 0 {
+				//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, reason, result.Type, file.Name())
+				fmt.Printf("%s | %s | file: %s\n", realRcptAddr, reason, file.Name())
+			}
 			//if result.Type > 0 {
 			//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, result.Reason, result.Type, file.Name())
 			//}
