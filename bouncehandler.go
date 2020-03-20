@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"gopkg.in/erizocosmico/go-bouncespy.v1"
 	"io"
@@ -42,33 +43,31 @@ func main() {
 
 			header := m.Header
 
+			// TODO: обработать Diagnostic-Code
 			// для начала ищем заголовок X-Failed-Recipients. Если его нет - продолжаем обработку
 			failedRcptAddr := header.Get("X-Failed-Recipients")
+
 			if len(failedRcptAddr) > 0 {
 				realRcptAddr = failedRcptAddr
+				reason, err = findInBody(m, "diagnostic-code:")
+				if err != nil {
+					reason, err = findInBody(m, "status:")
+				}
+				//_, reason = analyzeWithBounceSpy(m)
 			} else {
 				switch hFrom := header.Get("from"); hFrom {
 				case "MAILER-DAEMON@yahoo.com":
 					realRcptAddr, reason = getYahooData(m)
-
+				//case "MAILER-DAEMON@rambler.ru":
+				//	realRcptAddr, reason = getRamblerData(m)
+				default:
+					realRcptAddr, reason = analyzeWithBounceSpy(m)
 				}
 			}
 
-			body, err := ioutil.ReadAll(m.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			result := bouncespy.Analyze(header, body)
-			if len(reason) == 0 {
-				reason = string(result.Reason)
-			}
-			if len(realRcptAddr) == 0 {
-				realRcptAddr = findOriginalRecipient(body)
-			}
-
+			fmt.Printf("%s | %s | file: %s\n", realRcptAddr, reason, file.Name())
 			//if len(realRcptAddr) > 0 {
-			fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, reason, result.Type, file.Name())
+			//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, reason, result.Type, file.Name())
 			//}
 			//if result.Type > 0 {
 			//fmt.Printf("%s | %s | Type: %d| file: %s\n", realRcptAddr, result.Reason, result.Type, file.Name())
@@ -77,6 +76,21 @@ func main() {
 		}
 	}
 }
+
+func analyzeWithBounceSpy(m *mail.Message) (string, string) {
+	//header := m.Header
+	body, err := ioutil.ReadAll(m.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	r := bouncespy.Analyze(m.Header, body)
+	realRcpt := findOriginalRecipient(body)
+	return realRcpt, string(r.Reason)
+}
+
+//func getRamblerData(m *mail.Message) (string, string) {
+//	return "", ""
+//}
 
 func findOriginalRecipient(body []byte) string {
 	rcptAddr := ""
@@ -88,14 +102,64 @@ func findOriginalRecipient(body []byte) string {
 	}
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "original-recipient:") {
+		if strings.HasPrefix(line, "original-recipient:") || strings.HasPrefix(line, "final-recipient:") {
 			parts := strings.Split(line, ";")
 			if len(parts) > 1 {
-				rcptAddr = strings.Trim(parts[1], "<>")
+				rcptAddr = strings.Trim(parts[1], "<> ")
 			}
 		}
 	}
 	return rcptAddr
+}
+
+//func findDiagCode(body []byte) string {
+//	diagCode := ""
+//	lns := strings.Split(strings.ToLower(string(body)), "\n")
+//	numLines := len(lns)
+//	var lines = make([]string, numLines)
+//	for i, ln := range lns {
+//		lines[numLines-i-1] = ln
+//	}
+//
+//	for _, line := range lines {
+//		line = strings.TrimSpace(line)
+//		if strings.HasPrefix(line, "diagnostic-code:") {
+//			parts := strings.Split(line, ";")
+//			if len(parts) > 1 {
+//				diagCode = parts[1]
+//			}
+//		}
+//	}
+//	return diagCode
+//}
+
+func findInBody(m *mail.Message, header string) (result string, err error) {
+	body, err := ioutil.ReadAll(m.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	lns := strings.Split(strings.ToLower(string(body)), "\n")
+	numLines := len(lns)
+	var lines = make([]string, numLines)
+	for i, ln := range lns {
+		lines[numLines-i-1] = ln
+	}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, header) {
+			parts := strings.Split(line, ";")
+			if len(parts) > 1 {
+				result = parts[1]
+			} else {
+				result = parts[0]
+			}
+		}
+	}
+	if result != "" {
+		return result, nil
+	}
+	return "", errors.New(fmt.Sprintf("header %s not founs", header))
 }
 
 //func getDomain(h string) (domain string, err error) {
